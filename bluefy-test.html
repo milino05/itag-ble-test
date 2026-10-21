@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#10151c">
+<title>iTAG — Diagnosi Bluefy</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif}*{box-sizing:border-box}body{margin:0;background:#10151c;color:#f1f5f9;line-height:1.5}.wrap{max-width:720px;padding:24px 16px 60px;margin:auto}h1{font-size:27px;margin:0 0 10px}h2{font-size:17px}.muted{color:#b6c1ce}.panel{background:#1b2531;border:1px solid #3b4859;padding:16px;border-radius:16px;margin:16px 0}button{display:block;width:100%;padding:14px 10px;background:#9bdfc5;border:0;border-radius:10px;color:#14352b;font-size:16px;font-weight:750;margin:10px 0;cursor:pointer}button.alt{background:#c7d6f8;color:#152d56}button.third{background:#f0d098;color:#493500}button:disabled{opacity:.5}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;color:#deedff;background:#0c121a;padding:12px;border-radius:10px;min-height:135px;max-height:310px;overflow:auto}code{color:#a4eacb}.status{font-weight:650}.note{font-size:14px;color:#c9d7e5}
+</style>
+</head>
+<body><main class="wrap"><div class="muted">Diagnostica BLE • iOS / Android</div><h1>Test Bluefy + iTAG</h1><p class="muted">Verifichiamo se Bluefy apre la selezione Bluetooth. Non scriviamo dati sul dispositivo e non attiviamo la suoneria.</p>
+<div class="panel"><h2>Stato browser</h2><div id="info" class="status">Caricamento...</div></div>
+<div class="panel"><h2>Prova uno alla volta</h2><p class="note">Tocca un pulsante e verifica se compare l'elenco dei dispositivi. Se il primo fallisce, prova il secondo, poi il terzo.</p>
+<button id="byname">1. Cerca per nome (iTAG)</button>
+<button id="byservice" class="alt">2. Cerca per servizio FFE0</button>
+<button id="all" class="third">3. Cerca tutti i dispositivi</button>
+<p class="note">Se compare una lista, seleziona un iTAG. La pagina tenterà poi di leggere <code>FFE0 / FFE1</code> e ricevere le notifiche. Il risultato può fallire anche se la selezione iniziale riesce: sono due test distinti.</p></div>
+<div class="panel"><h2>Registro eventi</h2><button id="copy" class="alt">Copia registro</button><pre id="log"></pre></div></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), lines=[];let device=null,characteristic=null;
+function log(x){const s=`${new Date().toLocaleTimeString('it-IT')} — ${x}`; lines.push(s); $('log').textContent=lines.join('\n'); $('log').scrollTop=$('log').scrollHeight;}
+function report(e){const details=[e?.name,e?.message,e?.code!==undefined?`code=${e.code}`:'',e?.toString?.()].filter(Boolean).join(' | ');log('ERRORE: '+details);}
+const supported=typeof navigator.bluetooth?.requestDevice==='function';
+$('info').textContent=`HTTPS: ${isSecureContext?'sì':'NO'} | Web Bluetooth: ${supported?'presente':'assente'} | Bluefy UA: ${/bluefy/i.test(navigator.userAgent)?'sì':'non identificato'}`;
+log($('info').textContent);
+async function test(mode){
+ if(!supported){log('Impossibile procedere: navigator.bluetooth.requestDevice non disponibile.');return;}
+ const opt=mode==='name'?
+  {filters:[{namePrefix:'iTAG'},{namePrefix:'ITAG'},{namePrefix:'iTag'},{namePrefix:'itag'}],optionalServices:[0xffe0]}:
+  mode==='service'?
+  {filters:[{services:[0xffe0]}]}:
+  {acceptAllDevices:true,optionalServices:[0xffe0]};
+ log(`TEST ${mode}: richiesta selezione dispositivo; opzioni=${JSON.stringify(opt)}`);
+ try{
+  // IMPORTANT: keep requestDevice the first awaited operation after a tap.
+  const d=await navigator.bluetooth.requestDevice(opt);
+  log('SELEZIONE OK: '+(d.name||'(senza nome)'));
+  device=d;
+  const gatt=await d.gatt.connect();log('GATT OK');
+  const service=await gatt.getPrimaryService(0xffe0);log('FFE0 OK');
+  const c=await service.getCharacteristic(0xffe1);characteristic=c;log('FFE1 OK (notify='+String(c.properties.notify)+', read='+String(c.properties.read)+')');
+  c.addEventListener('characteristicvaluechanged',e=>{
+   const v=e.target.value;if(!v)return;
+   log('EVENTO FFE1: '+Array.from(new Uint8Array(v.buffer,v.byteOffset,v.byteLength)).map(b=>b.toString(16).padStart(2,'0')).join(' '));
+  });
+  try{await c.startNotifications();log('NOTIFICHE ATTIVE: premi il tasto iTAG');}
+  catch(e){log('startNotifications non riuscito (problema diverso dalla selezione):');report(e)}
+ }catch(e){report(e)}
+}
+$('byname').addEventListener('click',()=>test('name'));
+$('byservice').addEventListener('click',()=>test('service'));
+$('all').addEventListener('click',()=>test('all'));
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(lines.join('\n'));log('Registro copiato')}catch(e){log('Impossibile copiare: fai screenshot del registro')}});
+</script></body></html>
