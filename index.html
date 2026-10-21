@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05070b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Segnapunti padel Bluetooth per due pulsanti iTAG, versione sperimentale per Bluefy iOS.">
+  <title>Padel BLE · Bluefy</title>
+  <link rel="stylesheet" href="./app.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <main id="scoreboard" class="scoreboard" aria-label="Tabellone padel, tocca per aprire le impostazioni">
+    <section id="team-panel-0" class="team-panel team-a" aria-label="Squadra A, tocca per impostazioni">
+      <div class="team-name">SQUADRA A</div>
+      <div class="big-score" id="score-0" aria-live="polite">0</div>
+      <div class="indicator" id="connection-0"><span class="status-dot"></span><span id="connection-label-0">Non connesso</span></div>
+    </section>
+    <div class="center-rule" id="center-rule"></div>
+    <div class="scoreboard-divider" aria-hidden="true"></div>
+    <section id="team-panel-1" class="team-panel team-b" aria-label="Squadra B, tocca per impostazioni">
+      <div class="team-name">SQUADRA B</div>
+      <div class="big-score" id="score-1" aria-live="polite">0</div>
+      <div class="indicator" id="connection-1"><span class="status-dot"></span><span id="connection-label-1">Non connesso</span></div>
+    </section>
+    <button class="open-settings" id="open-settings" aria-label="Apri impostazioni">☰</button>
+  </main>
+
+  <div id="portrait-note" role="note">Ruota il telefono in orizzontale per avere punteggi più grandi.</div>
+
+  <div class="overlay hidden" id="overlay" aria-hidden="true">
+    <section class="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-head"><div><h1 id="settings-title">Padel BLE</h1><p>Bluefy · prototipo web 0.1</p></div><button class="close" id="close-settings" aria-label="Chiudi impostazioni">×</button></div>
+      <div class="settings-scroll">
+        <div id="notices" class="notice">Per collegare i pulsanti usa Bluefy su iPhone e una pagina HTTPS.</div>
+        <div class="setting-section">
+          <h2>Dispositivi Bluetooth</h2>
+          <div class="device-row"><div><strong>Squadra A</strong><small id="detail-0">Da associare</small></div><div class="device-actions"><button class="primary teal" id="connect-0">Collega A</button><button class="secondary" id="disconnect-0">Scollega</button></div></div>
+          <div class="device-row"><div><strong>Squadra B</strong><small id="detail-1">Da associare</small></div><div class="device-actions"><button class="primary orange" id="connect-1">Collega B</button><button class="secondary" id="disconnect-1">Scollega</button></div></div>
+          <p class="hint">Ricerca filtrata sul servizio <code>FFE0</code>, l'unica risultata affidabile nei tuoi test. Ascolto eventi su <code>FFE1</code>.</p>
+        </div>
+        <div class="setting-section">
+          <h2>Regole della partita</h2>
+          <label class="select-label" for="mode">Punteggio sul 40–40</label>
+          <select id="mode">
+            <option value="ADVANTAGE">Vantaggi classici (AD illimitati)</option>
+            <option value="GOLDEN">Punto de Oro (punto decisivo)</option>
+            <option value="STAR">Star Point (2 vantaggi annullati)</option>
+          </select>
+          <p class="hint">Il cambio di regola richiede una nuova partita. I set non sono previsti. Dopo un game, il tabellone mostra i game fino alla pressione successiva.</p>
+        </div>
+        <div class="setting-section">
+          <h2>Correzione e prova</h2>
+          <div class="button-grid"><button class="secondary" id="plus-0">+ punto A (test)</button><button class="secondary" id="plus-1">+ punto B (test)</button><button class="secondary" id="undo-0">Annulla A</button><button class="secondary" id="undo-1">Annulla B</button><button class="secondary" id="fake-0">Simula FFE1 A</button><button class="secondary" id="fake-1">Simula FFE1 B</button><button class="secondary" id="read-0">Leggi FFE1 A</button><button class="secondary" id="read-1">Leggi FFE1 B</button></div>
+          <p class="hint">Clic singolo iTAG: punto dopo 950 ms. Doppio clic: annulla un punto della propria squadra. Notifiche ravvicinate sotto 320 ms vengono ignorate perché gli iTAG possono duplicarle.</p>
+          <div class="button-grid"><button class="secondary" id="fullscreen">Schermo intero (se supportato)</button><button class="danger" id="reset">Nuova partita</button></div>
+        </div>
+        <div class="setting-section"><div class="log-head"><h2>Registro Bluetooth</h2><div><button class="secondary small" id="copy-log">Copia</button><button class="secondary small" id="clear-log">Pulisci</button></div></div><pre id="log" tabindex="0">Nessun evento.</pre><p class="hint">Se compare «Notifiche attive» ma premendo l'iTAG non appare «NOTIFY FFE1», il problema è prima della logica del punteggio: Bluefy potrebbe non inoltrare le notifiche senza CCCD 0x2902.</p></div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
