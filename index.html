@@ -8,8 +8,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Segnapunti padel Bluetooth per due pulsanti iTAG, versione sperimentale per Bluefy iOS.">
   <title>Padel BLE · Bluefy</title>
-  <link rel="stylesheet" href="./app.css">
-  <script type="module" src="./app.mjs"></script>
+  <link rel="stylesheet" href="./app.css?v=debug02">
+  <script type="module" src="./app.mjs?v=debug02"></script>
 </head>
 <body>
   <main id="scoreboard" class="scoreboard" aria-label="Tabellone padel, tocca per aprire le impostazioni">
@@ -32,7 +32,7 @@
 
   <div class="overlay hidden" id="overlay" aria-hidden="true">
     <section class="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div class="settings-head"><div><h1 id="settings-title">Padel BLE</h1><p>Bluefy · prototipo web 0.1</p></div><button class="close" id="close-settings" aria-label="Chiudi impostazioni">×</button></div>
+      <div class="settings-head"><div><h1 id="settings-title">Padel BLE</h1><p>Bluefy · diagnostica BLE 0.2</p></div><button class="close" id="close-settings" aria-label="Chiudi impostazioni">×</button></div>
       <div class="settings-scroll">
         <div id="notices" class="notice">Per collegare i pulsanti usa Bluefy su iPhone e una pagina HTTPS.</div>
         <div class="setting-section">
@@ -57,7 +57,23 @@
           <p class="hint">Clic singolo iTAG: punto dopo 950 ms. Doppio clic: annulla un punto della propria squadra. Notifiche ravvicinate sotto 320 ms vengono ignorate perché gli iTAG possono duplicarle.</p>
           <div class="button-grid"><button class="secondary" id="fullscreen">Schermo intero (se supportato)</button><button class="danger" id="reset">Nuova partita</button></div>
         </div>
-        <div class="setting-section"><div class="log-head"><h2>Registro Bluetooth</h2><div><button class="secondary small" id="copy-log">Copia</button><button class="secondary small" id="clear-log">Pulisci</button></div></div><pre id="log" tabindex="0">Nessun evento.</pre><p class="hint">Se compare «Notifiche attive» ma premendo l'iTAG non appare «NOTIFY FFE1», il problema è prima della logica del punteggio: Bluefy potrebbe non inoltrare le notifiche senza CCCD 0x2902.</p></div>
+        <div class="setting-section debug-section">
+          <h2>Diagnostica avanzata iTAG</h2>
+          <p class="hint">Questi test non modificano la configurazione dell’iTAG e non scrivono dati. Collega prima un iTAG e lascia Bluefy in primo piano.</p>
+          <div class="debug-grid">
+            <button class="secondary" id="inspect-0">Esamina BLE A</button>
+            <button class="secondary" id="inspect-1">Esamina BLE B</button>
+            <button class="secondary" id="observe-0">Ascolta 15 s · A</button>
+            <button class="secondary" id="observe-1">Ascolta 15 s · B</button>
+            <button class="secondary" id="poll-0">Campiona FFE1 · A</button>
+            <button class="secondary" id="poll-1">Campiona FFE1 · B</button>
+            <button class="secondary" id="retry-0">Riattiva notifiche · A</button>
+            <button class="secondary" id="retry-1">Riattiva notifiche · B</button>
+          </div>
+          <p class="hint">«Esamina BLE» controlla proprietà e descrittori; «Ascolta 15 s» conta gli eventi effettivi mentre premi 5 volte; «Campiona» confronta letture ripetute per 8 s (non assegna punti e può perdere pressioni vere); «Riattiva» prova stop/start delle notifiche.</p>
+          <div class="debug-summary" id="debug-summary" aria-live="polite">Diagnostica non avviata.</div>
+        </div>
+        <div class="setting-section"><div class="log-head"><h2>Registro Bluetooth</h2><div><button class="secondary small" id="copy-log">Copia</button><button class="secondary small" id="clear-log">Pulisci</button></div></div><pre id="log" tabindex="0">Nessun evento.</pre><p class="hint">«startNotifications OK» non dimostra che le notifiche arrivino. Durante i test evita di premere «Leggi FFE1»: alcuni browser generano lo stesso evento anche in risposta a una lettura.</p></div>
       </div>
     </section>
   </div>

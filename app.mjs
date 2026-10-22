@@ -17,6 +17,18 @@ const connections = [0,1].map(() => ({ device:null, characteristic:null, onValue
   phase:'Non connesso' }));
 const clicks = [new ClickDetector(),new ClickDetector()];
 const timers = [null,null];
+// Diagnostics do not change the production point detector except during explicit read tests.
+const readInProgress = [false,false];
+const sampling = [false,false];
+const observation = [null,null];
+const debugEvents = [[],[]];
+const debugSession = new Date().toISOString();
+function debugSummary(s) { $('debug-summary').textContent = s; }
+function diagnosticMark(t, message) {
+  log(`${teamName(t)} · DEBUG ${message}`);
+  debugSummary(`Ultima diagnostica ${teamName(t)}: ${message}`);
+}
+
 const logs = [];
 let overlayOpen = false;
 const canvas = document.createElement('canvas');
@@ -110,6 +122,7 @@ function detach(t,disconnect=true) {
   if(c.device && c.onDisconnect){try{c.device.removeEventListener('gattserverdisconnected',c.onDisconnect);}catch{}}
   if(disconnect && c.device?.gatt?.connected){try{c.device.gatt.disconnect();}catch{}}
   c.characteristic=null;c.onValue=null;c.onDisconnect=null;c.connected=false;c.subscribed=false;
+  observation[t]=null;sampling[t]=false;readInProgress[t]=false;
   resetClick(t);
 }
 function resetClick(t){cancelTimer(t);clicks[t].reset();}
@@ -133,6 +146,7 @@ async function connectTag(t) {
   detach(t);
   const c=connections[t],generation=c.generation;
   c.device=device;c.received=0;
+  debugEvents[t]=[];
   c.onDisconnect=()=>{
     if(c.generation!==generation)return;
     c.connected=false;c.subscribed=false;
@@ -157,11 +171,21 @@ async function connectTag(t) {
     c.onValue=(event)=>{
       if(c.generation!==generation)return;
       const value=event?.target?.value || characteristic.value;
-      c.received++;
       const bytes=hexOf(value);
-      log(`${teamName(t)} · NOTIFY FFE1 [${bytes||'vuoto'}] #${c.received}`);
-      $('detail-'+t).textContent=`Notifiche ricevute: ${c.received} · ${(c.device?.name)||'iTAG'}`;
-      press(t,'iTAG');
+      const time=now();
+      const duringRead=readInProgress[t] || sampling[t];
+      const prev=debugEvents[t].at(-1);
+      debugEvents[t].push({time, bytes, duringRead});
+      if(debugEvents[t].length>150)debugEvents[t].shift();
+      const diff=prev ? ` Δ${Math.round(time-prev.time)}ms` : '';
+      if(duringRead){
+        log(`${teamName(t)} · EVENTO FFE1 DURANTE READ [${bytes||'vuoto'}]${diff} (possibile eco lettura; NON conteggiato)`);
+      } else {
+        c.received++;
+        log(`${teamName(t)} · NOTIFY FFE1 [${bytes||'vuoto'}] #${c.received}${diff}`);
+        $('detail-'+t).textContent=`Notifiche ricevute: ${c.received} · ${(c.device?.name)||'iTAG'}`;
+        press(t,'iTAG');
+      }
     };
     characteristic.addEventListener('characteristicvaluechanged',c.onValue);
     log(`${teamName(t)} · Listener 'characteristicvaluechanged' registrato`);
@@ -169,6 +193,7 @@ async function connectTag(t) {
     await characteristic.startNotifications();
     if(c.generation!==generation)return;
     c.subscribed=true;
+    log(`${teamName(t)} · Dopo startNotifications: connected=${!!device.gatt?.connected}, value=${hexOf(characteristic.value)||'nessuno'}, notify=${!!characteristic.properties?.notify}`);
     status(t,'Notifiche richieste; in attesa di pressioni','good');
     notice('Connessione riuscita. Premi l’iTAG: se arriva una riga NOTIFY FFE1 nel registro, il segnapunti dovrebbe funzionare.');
     log(`${teamName(t)} · startNotifications OK. Ora premi iTAG. Nessuna ricezione confermata finché non appare NOTIFY FFE1.`);
@@ -181,9 +206,110 @@ async function connectTag(t) {
 async function readValue(t) {
   const c=connections[t];
   if(!c.characteristic){log(`${teamName(t)} · Prima collega iTAG`);return;}
-  try { const v=await c.characteristic.readValue();log(`${teamName(t)} · Lettura FFE1 [${hexOf(v)}] (diagnostica: NON è un evento di pressione)`);}
-  catch(e){log(`${teamName(t)} · Lettura FFE1 fallita: ${errorText(e)}`);}
+  if(sampling[t]){log(`${teamName(t)} · Lettura singola non disponibile durante campionamento`);return;}
+  readInProgress[t]=true;
+  const start=now();
+  log(`${teamName(t)} · READ FFE1 inizio, valore cache=[${hexOf(c.characteristic.value)}]`);
+  try {
+    const v=await c.characteristic.readValue();
+    log(`${teamName(t)} · READ FFE1 OK [${hexOf(v)}] (${Math.round(now()-start)}ms). La lettura NON prova una pressione.`);
+  } catch(e){log(`${teamName(t)} · READ FFE1 errore dopo ${Math.round(now()-start)}ms: ${errorText(e)}`);}
+  finally {setTimeout(()=>{readInProgress[t]=false;},250);}
 }
+
+// The following tests are intentionally read-only (except the start/stop notification toggle).
+function fmtProperties(props) {
+  if(!props)return 'proprieta non disponibili';
+  return ['broadcast','read','write','writeWithoutResponse','notify','indicate',
+    'authenticatedSignedWrites','reliableWrite','writableAuxiliaries']
+    .map(k=>`${k}=${!!props[k]}`).join(', ');
+}
+async function inspectBle(t) {
+  const c=connections[t];
+  if(!c.device || !c.characteristic) {diagnosticMark(t,'collega prima il dispositivo');return;}
+  diagnosticMark(t,'ispezione BLE iniziata');
+  log(`${teamName(t)} · Browser: ${navigator.userAgent}`);
+  log(`${teamName(t)} · GATT connected=${!!c.device.gatt?.connected}; notifiche richieste=${c.subscribed}; eventi ricevuti=${c.received}`);
+  log(`${teamName(t)} · FFE1 UUID=${c.characteristic.uuid}, props: ${fmtProperties(c.characteristic.properties)}`);
+  log(`${teamName(t)} · FFE1 cache=[${hexOf(c.characteristic.value)||'vuoto'}]`);
+  if(typeof c.characteristic.getDescriptors==='function') {
+    try {
+      const descriptors=await c.characteristic.getDescriptors();
+      log(`${teamName(t)} · DESCRITTORI: ${descriptors.length} -> ${descriptors.map(d=>d.uuid).join(', ')||'nessuno'}`);
+      for(const d of descriptors) {
+        if(typeof d.readValue==='function') {
+          try {const val=await d.readValue();log(`${teamName(t)} · DESCRIPTOR ${d.uuid} READ=[${hexOf(val)}]`);}
+          catch(e){log(`${teamName(t)} · DESCRIPTOR ${d.uuid} read FAIL ${errorText(e)}`);}
+        }
+      }
+    } catch(e){log(`${teamName(t)} · getDescriptors() FAIL: ${errorText(e)}`);}
+  } else log(`${teamName(t)} · API getDescriptors() non disponibile in Bluefy`);
+  // Test availability, not write: CCCD is a restricted descriptor in some Web Bluetooth implementations.
+  if(typeof c.characteristic.getDescriptor==='function') {
+    for(const uuid of [0x2902,0x0229]){
+      try {const d=await c.characteristic.getDescriptor(uuid);log(`${teamName(t)} · getDescriptor(0x${uuid.toString(16)}) OK UUID=${d.uuid}`);}
+      catch(e){log(`${teamName(t)} · getDescriptor(0x${uuid.toString(16)}) FAIL ${errorText(e)}`);}
+    }
+  }
+  diagnosticMark(t,'ispezione terminata; controlla DESCRITTORI / 2902 / 0229 nel registro');
+}
+function observeBle(t) {
+  const c=connections[t];
+  if(!c.device || !c.characteristic || !c.device.gatt?.connected) {diagnosticMark(t,'collega prima il dispositivo');return;}
+  const start=now(), startAll=debugEvents[t].length, startNormal=c.received;
+  observation[t]={start, startAll, startNormal};
+  diagnosticMark(t,'ASCOLTO 15s iniziato: premi il pulsante 5 volte, ogni 1-2 secondi. Non usare i test READ nel frattempo.');
+  setTimeout(()=>{
+    if(!observation[t] || observation[t].start!==start)return;
+    const total=debugEvents[t].filter(e=>e.time>=start).length;
+    const readEvents=debugEvents[t].filter(e=>e.time>=start && e.duringRead).length;
+    diagnosticMark(t,`ASCOLTO 15s finito. Eventi totali=${total}, eventi durante letture=${readEvents}, eventi validi=${c.received-startNormal}.`);
+    observation[t]=null;
+  },15000);
+}
+async function sampleValue(t) {
+  const c=connections[t];
+  if(!c.characteristic || !c.device?.gatt?.connected) {diagnosticMark(t,'collega prima il dispositivo');return;}
+  if(sampling[t]){diagnosticMark(t,'campionamento gia attivo');return;}
+  sampling[t]=true;
+  diagnosticMark(t,'campionamento FFE1 per 8s: premi il pulsante varie volte; le letture NON assegneranno punti');
+  const started=now();let readCount=0,failures=0,changes=0,last=null;
+  try {
+    while(now()-started<8000 && sampling[t] && c.device?.gatt?.connected){
+      try{
+        const v=await Promise.race([c.characteristic.readValue(),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout read (1200ms)')),1200))]);
+        const current=hexOf(v);
+        readCount++;
+        if(last===null)log(`${teamName(t)} · CAMPIONE iniziale FFE1=[${current}]`);
+        else if(last!==current){changes++;log(`${teamName(t)} · CAMPIONE CAMBIATO #${readCount} [${last}] → [${current}]`);}
+        last=current;
+      }catch(e){failures++;log(`${teamName(t)} · CAMPIONAMENTO errore: ${errorText(e)}. Interrompo per evitare operazioni GATT sovrapposte.`);break;}
+      await new Promise(res=>setTimeout(res,190));
+    }
+  }finally{
+    sampling[t]=false;
+    setTimeout(()=>{readInProgress[t]=false;},300);
+    diagnosticMark(t,`CAMPIONAMENTO concluso: letture=${readCount}, variazioni=${changes}, errori=${failures}, ultimo=[${last??'nessuno'}].`);
+  }
+}
+async function restartNotifications(t) {
+  const c=connections[t];
+  if(!c.characteristic){diagnosticMark(t,'collega prima il dispositivo');return;}
+  if(sampling[t]){diagnosticMark(t,'aspetta la fine del campionamento');return;}
+  diagnosticMark(t,'STOP notifiche → START notifiche');
+  try {
+    if(typeof c.characteristic.stopNotifications==='function'){
+      await c.characteristic.stopNotifications();
+      log(`${teamName(t)} · stopNotifications OK`);
+    } else log(`${teamName(t)} · stopNotifications non disponibile`);
+  }catch(e){log(`${teamName(t)} · stopNotifications ERROR ${errorText(e)}`);}
+  try{
+    await c.characteristic.startNotifications();
+    c.subscribed=true;
+    diagnosticMark(t,'startNotifications ripetuto OK (ora verifica se arriva NOTIFY alla pressione)');
+  }catch(e){c.subscribed=false;diagnosticMark(t,`startNotifications ripetuto FALLITO: ${errorText(e)}`);}
+}
+
 function disconnectTag(t) {
   detach(t);connections[t].device=null;
   status(t,'Disconnesso manualmente');
@@ -239,6 +365,10 @@ for(let t=0;t<2;t++){
   $('undo-'+t).addEventListener('click',()=>{resetClicks();undoPoint(t,'menu');});
   $('fake-'+t).addEventListener('click',()=>{log(`${teamName(t)} · NOTIFICA SIMULATA [01] — NON prova il Bluetooth`);press(t,'simulazione');});
   $('read-'+t).addEventListener('click',()=>readValue(t));
+  $('inspect-'+t).addEventListener('click',()=>inspectBle(t));
+  $('observe-'+t).addEventListener('click',()=>observeBle(t));
+  $('poll-'+t).addEventListener('click',()=>sampleValue(t));
+  $('retry-'+t).addEventListener('click',()=>restartNotifications(t));
   $('team-panel-'+t).addEventListener('click',showSettings);
 }
 $('open-settings').addEventListener('click',e=>{e.stopPropagation();showSettings();});
@@ -262,6 +392,11 @@ window.addEventListener('orientationchange',()=>setTimeout(redraw,300));
 window.addEventListener('pagehide',()=>log('Pagina in uscita / sospesa: Bluefy potrebbe interrompere BLE'));
 $('mode').value=score.mode;
 redraw();
-log('Padel BLE Web 0.1 pronto. Per BLE apri via HTTPS in Bluefy.');
+log('Padel BLE Web 0.2 DIAGNOSTICA pronto. Per BLE apri via HTTPS in Bluefy.');
+log(`Ambiente: ${navigator.userAgent}`);
+log(`Feature: secureContext=${!!window.isSecureContext}, requestDevice=${typeof navigator.bluetooth?.requestDevice}, getAvailability=${typeof navigator.bluetooth?.getAvailability}`);
+log(`Sessione diagnostica ${debugSession}`);
+window.addEventListener('error',e=>log(`ERRORE JS: ${e.message} @${e.filename?.split('/').pop()}:${e.lineno}`));
+window.addEventListener('unhandledrejection',e=>log(`PROMISE non gestita: ${errorText(e.reason)}`));
 log('Driver web: FFE0→FFE1, listener prima di startNotifications; nessun accesso Android a setCharacteristicNotification.');
 if(!navigator.bluetooth?.requestDevice) notice('Qui Web Bluetooth non è disponibile. Su iPhone apri questo indirizzo HTTPS in Bluefy. Punteggio e test manuali funzionano comunque.');

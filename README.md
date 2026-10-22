@@ -1,57 +1,34 @@
-# Padel BLE — Bluefy Web 0.1 (sperimentale)
+# Padel BLE – Bluefy diagnostica 0.2
 
-Sito statico per **iPhone con Bluefy**, con lo stesso motore di punteggio della versione Android 0.2. Non necessita di Android Studio, compilazione, server applicativo, account o servizi a pagamento. Va **pubblicato con HTTPS** prima di usarlo con Bluetooth; l'apertura diretta di `index.html` da `file://` non basta.
+Questa è una variante **diagnostica** della web app per iPhone. Mantiene il tabellone e il motore del punteggio della Web 0.1, aggiungendo strumenti per capire perché Bluefy mostra `startNotifications OK` senza mai ricevere `NOTIFY FFE1`.
 
-## Cosa fa
+## Pubblicazione
 
-- Tabellone orizzontale con due punteggi enormi, game mostrati soltanto dopo un game vinto; primo tocco iTAG del game successivo torna ai punti **e conta il punto**.
-- Tre modalità selezionabili nelle impostazioni: **Vantaggi classici**, **Punto de Oro** e **Star Point** (due vantaggi annullati prima del punto decisivo).
-- Nessun set.
-- Due iTAG indipendenti, collegati dalla finestra Bluetooth di Bluefy con filtro sul servizio **FFE0**. L'app ascolta gli eventi della caratteristica **FFE1**.
-- Un clic: punto dopo 950 ms; doppio clic con notifiche valide distanti almeno 320 ms, entro 950 ms: annulla l'ultimo punto della propria squadra.
-- Test manuali e simulazione di notifiche, registro Bluetooth copiabile e cronologia salvata in `localStorage` del browser. Nessun invio di dati a server.
+Sostituisci nella radice del repository GitHub Pages già utilizzato **quattro file**:
+- `index.html`
+- `app.css`
+- `app.mjs`
+- `core.mjs`
 
-## Limite fondamentale di Bluefy / Web Bluetooth
+Pubblica su GitHub Pages e apri l'indirizzo HTTPS in Bluefy. I file hanno query `?v=debug02` per ridurre il rischio che Bluefy usi una versione precedente in cache. In alto deve apparire **Bluefy · diagnostica BLE 0.2**.
 
-I nostri iTAG espongono FFE1 come `READ, NOTIFY` ma **non espongono il CCCD standard 0x2902** (al suo posto è stato osservato `0x0229`). Android funziona perché la nostra app può chiamare l'API nativa `BluetoothGatt.setCharacteristicNotification(...)` senza scrivere quel descrittore.
+## Prova consigliata (prima squadra A, poi eventualmente B)
 
-**Web Bluetooth non espone questa API nativa**. Può usare solo `characteristic.startNotifications()` e l'evento `characteristicvaluechanged`. La specifica Web Bluetooth *prevede* la sottoscrizione a caratteristiche con NOTIFY anche se manca il CCCD, ma il risultato dipende dall'implementazione di Bluefy. Nelle prove precedenti Bluefy si collegava, trovava FFE0/FFE1 e diceva «NOTIFICHE ATTIVE», ma premendo l'iTAG non apparivano eventi. Questa versione tenta ancora il percorso standard, con listener registrato prima della sottoscrizione e gestione di due dispositivi separati. **Non è garantito che funzioni su iPhone.**
+1. Chiudi altre app che potrebbero usare l'iTAG, apri la web app in Bluefy e collega **solo A**. Attendi `startNotifications OK`.
+2. Tocca **Esamina BLE A**. Alla fine copia le righe `DESCRITTORI`, `getDescriptor(0x2902)` e `getDescriptor(0x229)` dal registro. Questa è una lettura/esplorazione: non viene scritto nulla nel dispositivo.
+3. Tocca **Ascolta 15 s · A**. Premi fisicamente il suo pulsante **5 volte**, distanziate di circa 1–2 secondi. Non usare i pulsanti `Leggi FFE1` durante questo test. Al termine vedrai il numero di eventi ricevuti: se è zero, il browser non ha inoltrato eventi al JavaScript in quei 15 secondi.
+4. Tocca **Campiona FFE1 · A** e premi più volte durante gli 8 secondi del test. Confronta i valori. Le letture possono restare invarianti anche se esistono eventi momentanei, perciò l'esito non è da solo definitivo.
+5. Tocca **Riattiva notifiche · A**, poi **Ascolta 15 s · A** e ripeti cinque pressioni. Questo prova la sequenza `stopNotifications()` / `startNotifications()`; è un tentativo, non una soluzione garantita.
+6. Usa **Copia** sotto Registro Bluetooth e manda il testo (o screenshot del registro e del riepilogo). Se non appare `NOTIFY FFE1` in nessuno dei test, probabilmente Bluefy non consente la sottoscrizione locale necessaria a questo modello di iTAG.
 
-Se un pulsante non produce righe `NOTIFY FFE1 [01]` nel registro dopo `startNotifications OK`, il blocco è il trasporto BLE/Web Bluetooth, non il calcolo dei punti. Leggere ripetutamente FFE1 non ha funzionato nei test e non è utilizzato per rilevare le pressioni. In tal caso occorrerà una piccola app iOS nativa (CoreBluetooth), un adattatore o un pulsante differente; la sola web app non può forzare l'ascolto locale come Android.
+La web app registra versione/ambiente browser, tempi e stato GATT, proprietà di FFE1 e descrittori (se esposti dal browser), errori, numero di notifiche reali, letture eseguite e variazioni dei valori.
 
-## Pubblicazione su GitHub Pages
+**Attenzione:** durante `Campiona` disattiviamo temporaneamente l'assegnazione dei punti dalle callback perché alcuni browser inviano `characteristicvaluechanged` anche per le letture. Eventuali vere pressioni in quel periodo potrebbero non venire contate. Lo scopo è solo la diagnosi. Non rivelare pubblicamente informazioni del registro che vuoi mantenere private (identificatori dispositivo/browser).
 
-1. Crea un repository GitHub (per esempio `padel-ble-web`).
-2. Carica **nella radice del repository** i quattro file `index.html`, `app.css`, `app.mjs`, `core.mjs`. `tests.mjs` e questo README sono facoltativi per la pubblicazione.
-3. In **Settings → Pages → Build and deployment**, seleziona **Deploy from a branch**, branch `main`, cartella `/ (root)`, quindi salva.
-4. Quando GitHub ha completato la pubblicazione, apri in Bluefy su iPhone `https://TUO-UTENTE.github.io/padel-ble-web/`.
-5. Metti l'iPhone **in orizzontale**, tocca il tabellone per aprire le impostazioni e premi `Collega A`. Seleziona il primo iTAG. Ripeti con `Collega B` per il secondo iTAG.
-6. Chiudi le impostazioni e premi un iTAG. Per controllare la ricezione, riapri il menu, vai al **Registro Bluetooth** e verifica la presenza di `NOTIFY FFE1`.
+## Cosa non può fare una pagina web
 
-Puoi anche caricare questi stessi file su qualsiasi hosting HTTPS statico. Bluefy deve restare aperto e lo schermo non deve andare in standby. La modalità fullscreen e il blocco orizzontale non sono garantiti su iOS/Bluefy; la pagina sfrutta la viewport disponibile.
+Un `startNotifications OK` non prova che le notifiche arrivino. Web Bluetooth non dà accesso alla chiamata nativa Android `BluetoothGatt.setCharacteristicNotification(...)`, che avevamo usato con successo nell'app Android in assenza di CCCD `0x2902`. Non esiste un modo JavaScript standard per forzare questa chiamata su iOS.
 
-## Sequenza di test consigliata
+## Test locali
 
-1. Senza pulsanti collegati: premi `+ punto A/B (test)`. Verifica 0 → 15 → 30 → 40 → GAME, poi la schermata con i game vinti e la pressione successiva che ritorna ai punti.
-2. Premi `Simula FFE1 A` una volta, attendi un secondo. Deve aggiungere un punto. È una prova della logica, **non** del Bluetooth.
-3. Collega **solo A** in Bluefy, premi fisicamente l'iTAG una volta, attendi un secondo e copia il registro.
-4. Se appare `NOTIFY FFE1`, prova il secondo pulsante. Se no, registra il messaggio e non perdere tempo con tentativi di polling FFE1.
-5. Se la ricezione funziona, prova i doppi clic con distanza **400–800 ms**: iTAG può emettere doppioni automatici a ~220 ms, che vengono ignorati.
-
-## Test automatici e limiti
-
-Per testare il motore del punteggio in Node.js 18+:
-
-```
-node tests.mjs
-```
-
-Questi test non verificano il driver Bluetooth né sostituiscono un test reale su iPhone. Il codice usa solo API web standard e non include librerie esterne, tracker o backend.
-
-## File inclusi
-
-- `index.html` — markup tabellone, menu, controlli e registro.
-- `app.css` — stile responsive, cifre ad alto contrasto.
-- `core.mjs` — motore punteggio e riconoscimento clic (indipendente dal browser).
-- `app.mjs` — driver Web Bluetooth e interfaccia.
-- `tests.mjs` — test JavaScript per le tre modalità e annullamento.
+`node tests.mjs` verifica il motore del punteggio e l'annullamento. Non può simulare realmente l'implementazione BLE di Bluefy.
