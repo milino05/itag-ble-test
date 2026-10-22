@@ -1,34 +1,30 @@
-# Padel BLE – Bluefy diagnostica 0.2
+# Padel BLE Web 0.3 – lettura continua FFE1 per Bluefy
 
-Questa è una variante **diagnostica** della web app per iPhone. Mantiene il tabellone e il motore del punteggio della Web 0.1, aggiungendo strumenti per capire perché Bluefy mostra `startNotifications OK` senza mai ricevere `NOTIFY FFE1`.
+## Perché questa versione
 
-## Pubblicazione
+Nel log reale Bluefy 3.9.3 / iOS 18.7 del 22 ottobre 2026, con entrambi gli iTAG collegabili, `startNotifications()` completava senza errori ma gli eventi `characteristicvaluechanged` non arrivavano. Tuttavia il test `Campiona FFE1` ha rilevato tre sequenze **00 → 01 → 00** durante pressioni fisiche. La versione 0.3 sfrutta quelle transizioni.
 
-Sostituisci nella radice del repository GitHub Pages già utilizzato **quattro file**:
-- `index.html`
-- `app.css`
-- `app.mjs`
-- `core.mjs`
+## Uso
 
-Pubblica su GitHub Pages e apri l'indirizzo HTTPS in Bluefy. I file hanno query `?v=debug02` per ridurre il rischio che Bluefy usi una versione precedente in cache. In alto deve apparire **Bluefy · diagnostica BLE 0.2**.
+1. Carica tutti i file contenuti nello ZIP nella radice della pagina GitHub Pages, sostituendo i precedenti.
+2. Apri la pagina HTTPS direttamente con Bluefy; verifica il titolo **Bluefy · lettura continua FFE1 0.3**.
+3. Premi **Collega A**, scegli l’iTAG e attendi **POLLING FFE1 START** nel registro.
+4. Premi il pulsante 10 volte, con 2 secondi tra le pressioni. Aspetta circa un secondo dopo ciascuna pressione per l'assegnazione del punto (riconoscimento doppio clic).
+5. Ripeti con B e poi con entrambi collegati. Nel log devono apparire **POLL TRANSIZIONE 00→01** e **01→00**.
+6. Usa **Copia** per inviare il log. In caso di errori, registra anche i messaggi `POLLING READ errore` e il totale delle letture.
 
-## Prova consigliata (prima squadra A, poi eventualmente B)
+Il poll si avvia da solo dopo ogni connessione. **Avvia/Ferma lettura A/B** consente di controllare ciascuna connessione. Se usi il test **Campiona FFE1**, il poll viene temporaneamente sospeso e riavviato alla fine. Per **Leggi FFE1** o **Riattiva notifiche**, ferma prima il poll. Il motore del punteggio e la gestione dei game sono quelli della precedente web app (tre regole, niente set).
 
-1. Chiudi altre app che potrebbero usare l'iTAG, apri la web app in Bluefy e collega **solo A**. Attendi `startNotifications OK`.
-2. Tocca **Esamina BLE A**. Alla fine copia le righe `DESCRITTORI`, `getDescriptor(0x2902)` e `getDescriptor(0x229)` dal registro. Questa è una lettura/esplorazione: non viene scritto nulla nel dispositivo.
-3. Tocca **Ascolta 15 s · A**. Premi fisicamente il suo pulsante **5 volte**, distanziate di circa 1–2 secondi. Non usare i pulsanti `Leggi FFE1` durante questo test. Al termine vedrai il numero di eventi ricevuti: se è zero, il browser non ha inoltrato eventi al JavaScript in quei 15 secondi.
-4. Tocca **Campiona FFE1 · A** e premi più volte durante gli 8 secondi del test. Confronta i valori. Le letture possono restare invarianti anche se esistono eventi momentanei, perciò l'esito non è da solo definitivo.
-5. Tocca **Riattiva notifiche · A**, poi **Ascolta 15 s · A** e ripeti cinque pressioni. Questo prova la sequenza `stopNotifications()` / `startNotifications()`; è un tentativo, non una soluzione garantita.
-6. Usa **Copia** sotto Registro Bluetooth e manda il testo (o screenshot del registro e del riepilogo). Se non appare `NOTIFY FFE1` in nessuno dei test, probabilmente Bluefy non consente la sottoscrizione locale necessaria a questo modello di iTAG.
+## Note e limiti
 
-La web app registra versione/ambiente browser, tempi e stato GATT, proprietà di FFE1 e descrittori (se esposti dal browser), errori, numero di notifiche reali, letture eseguite e variazioni dei valori.
+- La rilevazione conta *solo* il fronte `00 → 01`, non ogni risposta che contiene `01`. Si evita così di assegnare punti ripetuti mentre il pulsante mantiene `01`.
+- La prima lettura è utilizzata come livello iniziale, e non assegna punti.
+- Intervallo: 45 ms **dopo** che una lettura GATT è terminata. Il tempo effettivo tra campioni include la latenza BLE; non equivale a 22 letture/secondo.
+- Due dispositivi possono rallentare reciprocamente le letture; la ricezione di tutti i clic **non è garantita**. Verificare con 10 pressioni lente per ciascuna squadra.
+- Doppio clic: la logica attuale continua a filtrare eventi separati da meno di 320 ms e consente il doppio clic fino a 950 ms. Due clic molto rapidi potrebbero risultare un clic singolo.
+- Consumo energetico potenzialmente maggiore rispetto alle notifiche; tieni Bluefy in primo piano, con schermo acceso.
+- Non serve alcuna app nativa iOS, firma o abbonamento; questa resta una web app.
 
-**Attenzione:** durante `Campiona` disattiviamo temporaneamente l'assegnazione dei punti dalle callback perché alcuni browser inviano `characteristicvaluechanged` anche per le letture. Eventuali vere pressioni in quel periodo potrebbero non venire contate. Lo scopo è solo la diagnosi. Non rivelare pubblicamente informazioni del registro che vuoi mantenere private (identificatori dispositivo/browser).
+## Verifiche locali
 
-## Cosa non può fare una pagina web
-
-Un `startNotifications OK` non prova che le notifiche arrivino. Web Bluetooth non dà accesso alla chiamata nativa Android `BluetoothGatt.setCharacteristicNotification(...)`, che avevamo usato con successo nell'app Android in assenza di CCCD `0x2902`. Non esiste un modo JavaScript standard per forzare questa chiamata su iOS.
-
-## Test locali
-
-`node tests.mjs` verifica il motore del punteggio e l'annullamento. Non può simulare realmente l'implementazione BLE di Bluefy.
+Esegui `node tests.mjs` e `node pulse-tests.mjs` per testare punteggio, clic e transizioni del pulsante. La ricezione BLE deve essere testata su iPhone reale; non è stata verificata in questa consegna.
