@@ -1,30 +1,36 @@
-# Padel BLE Web 0.3 – lettura continua FFE1 per Bluefy
+# Padel BLE Web 0.4 — polling ottimizzato e monitor prestazioni
 
-## Perché questa versione
+Versione sperimentale per **Bluefy su iPhone**. Nasce dalla 0.3, dove il polling su FFE1 permette già di leggere entrambi gli iTAG. La 0.4 cerca di risolvere il rallentamento osservato dopo centinaia di letture, ma non promette una ricezione perfetta degli eventi.
 
-Nel log reale Bluefy 3.9.3 / iOS 18.7 del 22 ottobre 2026, con entrambi gli iTAG collegabili, `startNotifications()` completava senza errori ma gli eventi `characteristicvaluechanged` non arrivavano. Tuttavia il test `Campiona FFE1` ha rilevato tre sequenze **00 → 01 → 00** durante pressioni fisiche. La versione 0.3 sfrutta quelle transizioni.
+## Correzioni
 
-## Uso
+- **Zero aggiornamenti dell'interfaccia per ogni lettura BLE**: le statistiche vengono aggiornate una volta al secondo con il menu aperto, mentre il tabellone non viene continuamente ridisegnato. Gli eventi significativi (pressioni, release, errori) continuano nel registro.
+- **Una sola lettura BLE in corso per dispositivo** e generazione del polling invalidata allo stop; non si aprono due cicli sovrapposti dopo ripartenze rapide.
+- **Nessuna richiesta iniziale di notifiche GATT** su Bluefy, dato che i test precedenti mostravano `startNotifications` OK ma zero notifiche effettive. La diagnostica manuale rimane disponibile.
+- **Monitor delle prestazioni**: letture/s negli ultimi 10 secondi, tempo medio dell'operazione `readValue()` e ultimo tempo, numero di letture, impulsi e errori per squadra.
+- **Avviso di letture lente** sotto circa 3.2 letture/s per almeno 3 aggiornamenti successivi, oppure quando una lettura dura oltre 1.6 s. La soglia è solo diagnostica, non una garanzia di cattura.
+- **Ripristina BLE A/B**: disconnette e tenta di ricollegare l'iTAG scelto senza azzerare la partita. È manuale perché il ripristino interrompe brevemente la ricezione; Bluefy potrebbe richiedere di selezionare nuovamente il dispositivo.
 
-1. Carica tutti i file contenuti nello ZIP nella radice della pagina GitHub Pages, sostituendo i precedenti.
-2. Apri la pagina HTTPS direttamente con Bluefy; verifica il titolo **Bluefy · lettura continua FFE1 0.3**.
-3. Premi **Collega A**, scegli l’iTAG e attendi **POLLING FFE1 START** nel registro.
-4. Premi il pulsante 10 volte, con 2 secondi tra le pressioni. Aspetta circa un secondo dopo ciascuna pressione per l'assegnazione del punto (riconoscimento doppio clic).
-5. Ripeti con B e poi con entrambi collegati. Nel log devono apparire **POLL TRANSIZIONE 00→01** e **01→00**.
-6. Usa **Copia** per inviare il log. In caso di errori, registra anche i messaggi `POLLING READ errore` e il totale delle letture.
+Le regole Advantage, Golden Point e Star Point, i game, lo storico e la modalità orizzontale sono invariati. Non sono presenti set.
 
-Il poll si avvia da solo dopo ogni connessione. **Avvia/Ferma lettura A/B** consente di controllare ciascuna connessione. Se usi il test **Campiona FFE1**, il poll viene temporaneamente sospeso e riavviato alla fine. Per **Leggi FFE1** o **Riattiva notifiche**, ferma prima il poll. Il motore del punteggio e la gestione dei game sono quelli della precedente web app (tre regole, niente set).
+## Installazione e prova
 
-## Note e limiti
+1. Estrai i file dallo ZIP e sostituisci quelli pubblicati su GitHub Pages **tutti insieme**.
+2. Apri il link HTTPS in Bluefy e ricarica la pagina finché non leggi `polling ottimizzato 0.4` nell'intestazione.
+3. Collega A e B. Attendi una decina di secondi: leggi nel menu il valore `lett./s` e `media ... ms` per entrambe le squadre.
+4. Lascia il telefono acceso con Bluefy in primo piano per **5–10 minuti**. Premi ogni tanto iTAG A e B e verifica che siano riconosciuti, annotando quando la frequenza peggiora.
+5. Se compare `LETTURA LENTA`, prova **Ripristina BLE A/B** per verificare se una nuova sessione GATT riporta le letture/s ai valori iniziali. Durante la riconnessione non usare il pulsante per punti importanti.
+6. Copia il registro: cerca `PRESTAZIONI`, `AVVISO LETTURA LENTA` e `VELOCITÀ RIPRISTINATA`.
 
-- La rilevazione conta *solo* il fronte `00 → 01`, non ogni risposta che contiene `01`. Si evita così di assegnare punti ripetuti mentre il pulsante mantiene `01`.
-- La prima lettura è utilizzata come livello iniziale, e non assegna punti.
-- Intervallo: 45 ms **dopo** che una lettura GATT è terminata. Il tempo effettivo tra campioni include la latenza BLE; non equivale a 22 letture/secondo.
-- Due dispositivi possono rallentare reciprocamente le letture; la ricezione di tutti i clic **non è garantita**. Verificare con 10 pressioni lente per ciascuna squadra.
-- Doppio clic: la logica attuale continua a filtrare eventi separati da meno di 320 ms e consente il doppio clic fino a 950 ms. Due clic molto rapidi potrebbero risultare un clic singolo.
-- Consumo energetico potenzialmente maggiore rispetto alle notifiche; tieni Bluefy in primo piano, con schermo acceso.
-- Non serve alcuna app nativa iOS, firma o abbonamento; questa resta una web app.
+## Come interpretare
 
-## Verifiche locali
+- Se la velocità rimane stabile: gli aggiornamenti troppo frequenti della UI erano probabilmente una parte del problema.
+- Se la velocità scende insieme all'aumento della latenza `READ media`: il collo di bottiglia è nella comunicazione di lettura BLE (Bluefy/iOS/dispositivo), non soltanto nel tabellone.
+- Se peggiora e un ripristino manuale risolve temporaneamente: la sessione GATT potrebbe degradare nel tempo, ma non è dimostrato senza altri test.
+- Se i valori `00→01→00` cambiano più velocemente della lettura, è inevitabile perdere alcuni clic: il polling non può garantire ogni pressione.
 
-Esegui `node tests.mjs` e `node pulse-tests.mjs` per testare punteggio, clic e transizioni del pulsante. La ricezione BLE deve essere testata su iPhone reale; non è stata verificata in questa consegna.
+## Test
+
+`node tests.mjs && node pulse-tests.mjs && node perf-tests.mjs`
+
+I test locali coprono le regole e il calcolo della velocità ma **non simulano l'intero Bluefy**. La prova determinante è sul dispositivo iPhone reale. 

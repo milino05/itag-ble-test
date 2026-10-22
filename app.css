@@ -17,3 +17,9 @@
 .debug-grid button{min-width:0;min-height:44px;white-space:normal;line-height:1.25}
 .debug-summary{background:#071627;border:1px solid #294560;border-radius:13px;padding:12px 14px;color:#b3def4;font-size:13px;line-height:1.5;margin-top:8px;white-space:pre-line}
 @media(max-width:440px){.debug-grid{grid-template-columns:1fr 1fr;gap:8px}.debug-grid button{font-size:12px;padding:10px 6px}}
+
+/* Performance warning, only visible when polling cannot keep up. */
+.perf-warning { color: #ffb27b; font-size: .83rem; font-weight: 700; margin: 6px 0 2px; }
+.perf-warning:empty { display:none; }
+.indicator.slow { color:#ffb27b; }
+.indicator.slow .status-dot { background:#ff8f55; }
