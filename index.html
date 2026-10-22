@@ -8,8 +8,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Segnapunti padel Bluetooth per due pulsanti iTAG, versione sperimentale per Bluefy iOS.">
   <title>Padel BLE · Bluefy · Lettura continua</title>
-  <link rel="stylesheet" href="./app.css?v=poll04">
-  <script type="module" src="./app.mjs?v=poll04"></script>
+  <link rel="stylesheet" href="./app.css?v=compat05">
+  <script type="module" src="./app.mjs?v=compat05"></script>
 </head>
 <body>
   <main id="scoreboard" class="scoreboard" aria-label="Tabellone padel, tocca per aprire le impostazioni">
@@ -32,7 +32,7 @@
 
   <div class="overlay hidden" id="overlay" aria-hidden="true">
     <section class="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div class="settings-head"><div><h1 id="settings-title">Padel BLE</h1><p>Bluefy · polling ottimizzato 0.4</p></div><button class="close" id="close-settings" aria-label="Chiudi impostazioni">×</button></div>
+      <div class="settings-head"><div><h1 id="settings-title">Padel BLE</h1><p>Bluefy · compatibilità iTAG 0.5</p></div><button class="close" id="close-settings" aria-label="Chiudi impostazioni">×</button></div>
       <div class="settings-scroll">
         <div id="notices" class="notice">Per collegare i pulsanti usa Bluefy su iPhone e una pagina HTTPS.</div>
         <div class="setting-section">
@@ -42,8 +42,8 @@
           <p class="hint">Ricerca filtrata su <code>FFE0</code>. In Bluefy il metodo principale è ora la lettura continua di <code>FFE1</code>, perché le notifiche non arrivano.</p>
         </div>
         <div class="setting-section">
-          <h2>Lettura iTAG ottimizzata</h2>
-          <p class="hint"><strong>Novità:</strong> i test mostrano che FFE1 passa da <code>00</code> a <code>01</code> quando premi l’iTAG, per poi tornare a <code>00</code>. L’app ora legge FFE1 ripetutamente e conta solo il passaggio <code>00→01</code>. La lettura si avvia automaticamente dopo il collegamento; puoi fermarla qui.</p>
+          <h2>Lettura iTAG · compatibilità 0.5</h2>
+          <p class="hint"><strong>Novità:</strong> i test mostrano che FFE1 passa da <code>00</code> a <code>01</code> quando premi l’iTAG, per poi tornare a <code>00</code>. L’app ora legge FFE1 ripetutamente e conta solo il passaggio <code>00→01</code>. Come nella 0.3 funzionante, l’app prova prima <code>startNotifications()</code> e poi avvia le letture. Se i valori <code>01</code> vengono rilevati, abbiamo recuperato le pressioni; puoi fermare la lettura qui.</p>
           <div class="button-grid">
             <button class="primary teal" id="toggle-poll-0">Avvia lettura A</button>
             <button class="primary orange" id="toggle-poll-1">Avvia lettura B</button>
@@ -52,7 +52,7 @@
           <div class="debug-summary" aria-live="off"><div id="poll-status-0">Squadra A: non attiva</div><div id="poll-status-1">Squadra B: non attiva</div></div>
           <p id="performance-warning-0" class="perf-warning" role="status"></p>
           <p id="performance-warning-1" class="perf-warning" role="status"></p>
-          <p class="hint">Velocità in <strong>letture/s (ultimi 10 secondi)</strong> e durata media della richiesta GATT. Se compare un avviso di lettura lenta, alcune pressioni potrebbero essere perse. Puoi provare «Ripristina BLE», che disconnette e riconnette quel pulsante senza azzerare il punteggio; durante l'operazione le pressioni non vengono ricevute. I contatori vengono aggiornati solo una volta al secondo per non rallentare Bluefy.</p>
+          <p class="hint">Velocità in <strong>letture/s (ultimi 10 secondi)</strong> e durata media della richiesta GATT. I contatori <code>00</code> e <code>01</code> riportano i campioni READ effettivamente letti: se <code>01</code> resta a zero, la pagina non sta vedendo gli impulsi. Se compare un avviso di lettura lenta, alcune pressioni potrebbero essere perse. Puoi provare «Ripristina BLE», che disconnette e riconnette quel pulsante senza azzerare il punteggio; durante l'operazione le pressioni non vengono ricevute. I contatori vengono aggiornati solo una volta al secondo per non rallentare Bluefy.</p>
           <p class="hint">Tieni Bluefy aperto in primo piano. La lettura continua potrebbe consumare più batteria e perdere pressioni molto brevi; verifica il conteggio premendo lentamente 10 volte per squadra.</p>
         </div>
         <div class="setting-section">

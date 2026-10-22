@@ -18,7 +18,8 @@ const connections = [0,1].map(() => ({ device:null, characteristic:null, onValue
   onDisconnect:null, connected:false, subscribed:false, received:0, generation:0,
   phase:'Non connesso', polling:false, pollTimer:null, pollReads:0, pollPresses:0, pollFailures:0,
   lastReport:0, pollInFlight:false, pollRun:0, resumeWhenIdle:false, inFlightStart:0,
-  slowStreak:0, healthSlow:false, perf:new ReadPerformance(), pulse:new PulseEdgeTracker() }));
+  slowStreak:0, healthSlow:false, perf:new ReadPerformance(), pulse:new PulseEdgeTracker(),
+  raw00:0, raw01:0, rawOther:0 }));
 const clicks = [new ClickDetector(),new ClickDetector()];
 const timers = [null,null];
 // Diagnostics do not change the production point detector except during explicit read tests.
@@ -135,6 +136,7 @@ function detach(t,disconnect=true) {
   observation[t]=null;sampling[t]=false;readInProgress[t]=false;
   c.pulse.reset(); c.pollReads=0;c.pollPresses=0;c.pollFailures=0;
   c.healthSlow=false; c.slowStreak=0; c.resumeWhenIdle=false; c.perf.reset();
+  c.raw00=0; c.raw01=0; c.rawOther=0;
   resetClick(t);
 }
 function resetClick(t){cancelTimer(t);clicks[t].reset();}
@@ -213,10 +215,21 @@ async function connectSelectedTag(t,device) {
     };
     characteristic.addEventListener('characteristicvaluechanged',c.onValue);
     log(`${teamName(t)} · Listener 'characteristicvaluechanged' registrato`);
-    // On the tested iTAG + Bluefy, notifications did not deliver any event.
-    // Do not subscribe unnecessarily: this is a read-only polling connection.
-    c.subscribed=false;
-    log(`${teamName(t)} · Notifiche non richieste: Bluefy non inoltrava FFE1; uso soltanto READ.`);
+    // IMPORTANT COMPATIBILITY WITH TESTED iTAG + BLUEFY:
+    // Version 0.3 (working) called startNotifications() BEFORE starting readValue polling.
+    // Version 0.4 (not working) removed it and observed no 00→01 transitions.
+    // Bluefy need not dispatch JS events; the subscription may still trigger a native
+    // BLE-side state change on this unusual iTAG. Restore this step for an A/B test.
+    status(t,'Attivazione compatibilità notifiche FFE1...');
+    try {
+      await characteristic.startNotifications();
+      if(c.generation!==generation)return;
+      c.subscribed=true;
+      log(`${teamName(t)} · startNotifications OK PRIMA del polling (compatibilità v0.3). Eventi JS ricevuti=${c.received}.`);
+    } catch(notifyErr) {
+      c.subscribed=false;
+      log(`${teamName(t)} · startNotifications FAIL (${errorText(notifyErr)}); provo comunque polling READ.`);
+    }
     if(c.generation!==generation)return;
     if(p.read) {
       startPolling(t);
@@ -259,7 +272,7 @@ function updatePollingUi(t) {
   const info=c.perf.snapshot(now());
   const label=$('poll-status-'+t);
   if(label) label.textContent=c.polling
-    ? `ATTIVA · ${info.readsPerSecond.toFixed(1)} lett./s · media ${Math.round(info.meanLatency)} ms · ultimo ${Math.round(info.lastLatency)} ms · tot. ${c.pollReads} · punti rilevati ${c.pollPresses} · errori ${c.pollFailures}`
+    ? `ATTIVA · ${info.readsPerSecond.toFixed(1)} lett./s · media ${Math.round(info.meanLatency)} ms · letture: ${c.pollReads} · 00: ${c.raw00} · 01: ${c.raw01} · pressioni: ${c.pollPresses} · errori: ${c.pollFailures}`
     : `FERMA · ${c.pollReads} letture · ${c.pollPresses} impulsi`;
   const button=$('toggle-poll-'+t);
   if(button) button.textContent=c.polling ? `Ferma lettura ${teamName(t)}` : `Avvia lettura ${teamName(t)}`;
@@ -284,7 +297,7 @@ function monitorPoll(t) {
     log(`${teamName(t)} · ${slow?'AVVISO LETTURA LENTA':'VELOCITÀ RIPRISTINATA'}: ${info.readsPerSecond.toFixed(1)} lett./s, media ${Math.round(info.meanLatency)}ms, ultimo ${Math.round(info.lastLatency)}ms`);
   }
   if(tNow-c.lastReport>=20000){
-    log(`${teamName(t)} · PRESTAZIONI: ${info.readsPerSecond.toFixed(2)} lett./s (10s), READ media ${Math.round(info.meanLatency)}ms, ultimo ${Math.round(info.lastLatency)}ms, massimo ${Math.round(info.maxLatency)}ms, letture ${c.pollReads}, impulsi ${c.pollPresses}, errori ${c.pollFailures}`);
+    log(`${teamName(t)} · PRESTAZIONI: ${info.readsPerSecond.toFixed(2)} lett./s (10s), READ media ${Math.round(info.meanLatency)}ms, ultimo ${Math.round(info.lastLatency)}ms, massimo ${Math.round(info.maxLatency)}ms, letture ${c.pollReads}, FFE1[00]=${c.raw00}, FFE1[01]=${c.raw01}, altri=${c.rawOther}, impulsi ${c.pollPresses}, errori ${c.pollFailures}, notifSub=${c.subscribed}`);
     c.lastReport=tNow;
   }
   // With overlay hidden update only when a warning changes; avoids expensive
@@ -303,7 +316,7 @@ function stopPolling(t,announce=true) {
   c.pollTimer=null;
   c.healthSlow=false; c.slowStreak=0;
   updatePollingUi(t);
-  if(announce)log(`${teamName(t)} · Lettura continua FERMA (letture=${c.pollReads}, impulsi=${c.pollPresses}, errori=${c.pollFailures})`);
+  if(announce)log(`${teamName(t)} · Lettura continua FERMA (letture=${c.pollReads}, FFE1[00]=${c.raw00}, FFE1[01]=${c.raw01}, altri=${c.rawOther}, impulsi=${c.pollPresses}, errori=${c.pollFailures}, notifSub=${c.subscribed})`);
 }
 function startPolling(t) {
   const c=connections[t];
@@ -321,6 +334,7 @@ function startPolling(t) {
   c.pollReads=0;c.pollPresses=0;c.pollFailures=0;
   c.lastReport=now();
   c.pulse.reset();c.perf.reset();c.perf.start(c.lastReport);
+  c.raw00=0;c.raw01=0;c.rawOther=0;
   c.healthSlow=false;c.slowStreak=0;c.healthRendered=false;
   const generation=c.generation, run=c.pollRun;
   updatePollingUi(t);
@@ -338,6 +352,10 @@ function startPolling(t) {
       c.pollReads++;
       c.perf.add(ended,ended-started,true);
       const bytes=hexOf(v);
+      const raw=bytesFirstByte(bytes);
+      if(raw===0)c.raw00++;
+      else if(raw===1)c.raw01++;
+      else c.rawOther++;
       handlePulse(t,bytes,'POLL');
     } catch(e){
       if(!c.polling || c.pollRun!==run || c.generation!==generation)return;
@@ -563,11 +581,11 @@ window.addEventListener('pagehide',()=>log('Pagina in uscita / sospesa: Bluefy p
 document.addEventListener('visibilitychange',()=>log(`Visibilità pagina: ${document.visibilityState}`));
 $('mode').value=score.mode;
 redraw();
-log('Padel BLE Web 0.4 POLLING OTTIMIZZATO pronto. Statistiche aggiornate ogni secondo.');
+log('Padel BLE Web 0.5 COMPATIBILITÀ: startNotifications prima del polling + misure FFE1 00/01.');
 log(`Ambiente: ${navigator.userAgent}`);
 log(`Feature: secureContext=${!!window.isSecureContext}, requestDevice=${typeof navigator.bluetooth?.requestDevice}, getAvailability=${typeof navigator.bluetooth?.getAvailability}`);
 log(`Sessione diagnostica ${debugSession}`);
 window.addEventListener('error',e=>log(`ERRORE JS: ${e.message} @${e.filename?.split('/').pop()}:${e.lineno}`));
 window.addEventListener('unhandledrejection',e=>log(`PROMISE non gestita: ${errorText(e.reason)}`));
-log('Driver web: FFE0→FFE1; letture READ in sequenza (00→01 = pressione); notifiche disattivate per limitare overhead.');
+log('Driver web: FFE0→FFE1; startNotifications prima del polling come v0.3; READ 00→01 = pressione; monitor lento ogni secondo.');
 if(!navigator.bluetooth?.requestDevice) notice('Qui Web Bluetooth non è disponibile. Su iPhone apri questo indirizzo HTTPS in Bluefy. Punteggio e test manuali funzionano comunque.');
