@@ -1,3 +1,16 @@
+# Padel BLE Web 0.5.1 — numeri più grandi
+
+Questa è la versione **0.5 originale con sola modifica grafica**. Il calcolo dei punti, la gestione dei due iTAG, il polling BLE, le diagnostiche e le regole di gioco non sono stati modificati.
+
+Nella schermata del tabellone il dimensionamento automatico ora sfrutta fino al **96% della larghezza** di ciascuna metà (prima 90%) e al **92% dell'altezza del pannello** per l'inchiostro dei caratteri (prima 85%). Le dimensioni si ricalcolano in base a orientamento e risoluzione. I numeri restano su una sola riga senza distorsioni manuali.
+
+### Installazione
+Sostituisci tutti i file nel repository GitHub Pages (inclusi `app.mjs` e `index.html`), poi ricarica la pagina su Bluefy. Nel menu dovresti leggere **compatibilità iTAG 0.5.1**.
+
+Nota: questa versione non modifica né risolve l'eventuale rallentamento delle letture BLE riscontrato su Bluefy.
+
+---
+
 # Padel BLE Web 0.5 — fix compatibilità Bluefy/iTAG
 
 La versione 0.4 non ha riconosciuto nessuna pressione negli esperimenti su Bluefy 3.9.3 / iOS 18.7: non sono state registrate transizioni `00→01` (ma la 0.4 non registrava nel log ogni valore letto). La versione 0.3 aveva invece riconosciuto le pressioni.

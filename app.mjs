@@ -80,8 +80,13 @@ function fitScore(t) {
   ctx.font = `900 ${probe}px ${fontFamily}`;
   const measure = ctx.measureText(word);
   const height = (measure.actualBoundingBoxAscent||75) + (measure.actualBoundingBoxDescent||5);
-  const candidate = Math.min(w * 0.90 / Math.max(1,measure.width) * probe, h * 0.85 / Math.max(1,height) * probe);
-  elem.style.fontSize = `${Math.max(30,Math.floor(candidate))}px`;
+  // Fill most of each half of the landscape display while retaining a small
+  // proportional safety margin on both axes, independently of iPhone resolution.
+  const candidate = Math.min(
+    w * 0.96 / Math.max(1, measure.width) * probe,
+    h * 0.92 / Math.max(1, height) * probe
+  );
+  elem.style.fontSize = `${Math.max(30, Math.floor(candidate))}px`;
 }
 function redraw() {
   const s=score.snapshot();
